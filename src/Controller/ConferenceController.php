@@ -2,36 +2,74 @@
 
 namespace App\Controller;
 
+use App\Entity\Conference;
+use App\Repository\CommentRepository;
+use App\Repository\ConferenceRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Twig\Environment;
+use Twig\Error\LoaderError;
+use Twig\Error\RuntimeError;
+use Twig\Error\SyntaxError;
 
 class ConferenceController extends AbstractController
 {
+    /** Environment $twig */
+    private $twig;
+
+    public function __construct(Environment $twig)
+    {
+        $this->twig = $twig;
+    }
+
     /**
-     * @Route("/hello/{name}", name="homepage")
+     * @Route("/", name="homepage")
      *
-     * @param Request $request
-     * @param string $name
+     * @param ConferenceRepository $conferenceRepository
      *
      * @return Response
+     *
+     * @throws LoaderError When the template cannot be found
+     * @throws RuntimeError When an error occurred during rendering
+     * @throws SyntaxError When an error occurred during compilation
      */
-    public function index(Request $request, string $name = '')
+    public function index(ConferenceRepository $conferenceRepository)
     {
-        $greet = '';
-        if ($name) {
-           $greet = sprintf('<h1>Hello %s!</h1>', htmlspecialchars($name));
-        }
-        return new Response(<<<EOF
-<htlm>
-    <body>
-    $greet
-    <img src="/images/website-under-construction.gif">
-</body>
-</htlm>
+        return new Response($this->twig->render(
+            'conference/index.html.twig',
+            ['conferences' => $conferenceRepository->findAll()]
+        ));
+    }
 
-EOF
-        );
+    /**
+     * @Route("/conference/{id}", name="conference")
+     *
+     * @param Request $request
+     * @param Conference $conference
+     *
+     * @param CommentRepository $commentRepository
+     *
+     * @return Response
+     *
+     * @throws LoaderError
+     * @throws RuntimeError
+     * @throws SyntaxError
+     */
+    public function show(Request $request, Conference $conference, CommentRepository $commentRepository)
+    {
+        $offset = max(0, $request->query->getInt('offset', 0));
+        $paginator = $commentRepository->getCommentPaginator($conference, $offset);
+
+        return new Response($this->twig->render(
+            'conference/show.html.twig',
+            [
+                'conference' => $conference,
+                'comments' => $paginator,
+                'previous' => $offset - CommentRepository::PAGINATOR_PER_PAGE,
+                'next' => min(count($paginator), $offset + CommentRepository::PAGINATOR_PER_PAGE ),
+            ]
+        ));
     }
 }
